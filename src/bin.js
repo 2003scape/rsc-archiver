@@ -8,10 +8,10 @@ const yargs = require('yargs');
 const { JagArchive, hashFilename } = require('./');
 
 yargs
-    .scriptName(pkg.name)
+    .scriptName('rsc-archiver')
     .version(pkg.version)
     .command(
-        ['x <archive> <file> [<out>]', 'extract'],
+        ['x <archive> <files..>', 'extract'],
         'extract a file from an archive',
         yargs => {
             yargs.positional('archive', {
@@ -19,61 +19,63 @@ yargs
                 type: 'string'
             });
 
-            yargs.positional('file', {
-                description: 'the filename or hash within the archive',
-                type: 'string'
+            yargs.positional('files', {
+                description: 'the filenames or hashes within the archive',
+                type: 'array'
             });
 
-            yargs.positional('out', {
-                description: 'the filename to write to',
-                type: 'string',
-                optional: true
+            yargs.option('output', {
+                alias: 'o',
+                description: 'the filenames to write to',
+                type: 'array'
             });
         },
         async argv => {
             const archive = new JagArchive();
 
+            const outputNames =
+                argv.output && argv.output.length ? argv.output : argv.files;
+
+            if (outputNames.length && outputNames.length !== argv.files.length) {
+                process.errorCode = 1;
+                console.error('invalid number of output names: ' +
+                    `${argv.files.length} (files) != ` +
+                    `${outputNames.length} (output)`);
+                return;
+            }
+
             try {
                 archive.readArchive(await fs.readFile(argv.archive));
 
-                const file = archive.entries.get(+argv.file) ||
-                    archive.entries.get(hashFilename(argv.file));
-
-                if (!file) {
-                    process.errorCode = 1;
-                    console.error(`file/hash "${argv.file}" not found in "` +
-                        `${argv.archive}"`);
-                    return;
+                for (let i = 0; i < argv.files.length; i += 1) {
+                    const file = archive.getEntry(argv.files[i]);
+                    await fs.writeFile(outputNames[i], file);
                 }
-
-                argv.out = argv.out || argv.file;
-
-                await fs.writeFile(path.join('.', argv.out), file);
             } catch (e) {
                 process.errorCode = 1;
                 console.error(e);
             }
         })
     .command(
-        ['a <archive> <file> [-g]', 'add'],
-        'add a file to an archive',
+        ['a <archive> <files..>', 'add'],
+        'add files to an archive',
         yargs => {
-            yargs.option('g', {
-                alias: 'group',
-                description: 'compress files in one round instead of ' +
-                    'individually',
-                type: 'boolean',
-                default: false
-            });
-
             yargs.positional('archive', {
                 description: 'the .jag or .mem archive file',
                 type: 'string'
             });
 
-            yargs.positional('file', {
+            yargs.positional('files', {
                 description: 'the file you would like to add',
-                type: 'string'
+                type: 'array'
+            });
+
+            yargs.option('g', {
+                alias: 'group',
+                description: 'compress files in one block rather than ' +
+                    'individually',
+                type: 'boolean',
+                default: false
             });
         },
         async argv => {
@@ -86,26 +88,28 @@ yargs
             }
 
             try {
-                const filename = path.basename(argv.file);
-                archive.putEntry(filename, await fs.readFile(argv.file));
-                await fs.writeFile(argv.archive, archive.toArchive(!argv.g));
+                for (const file of argv.files) {
+                    const filename = path.basename(file);
+                    archive.putEntry(filename, await fs.readFile(file));
+                    await fs.writeFile(argv.archive, archive.toArchive(!argv.g));
+                }
             } catch (e) {
                 process.exitCode = 1;
                 console.error(e);
             }
         })
     .command(
-        ['d <archive> <file>', 'delete'],
-        'remove a file from an archive',
+        ['d <archive> <files..>', 'delete'],
+        'remove files from an archive',
         yargs => {
             yargs.positional('archive', {
                 description: 'the .jag or .mem archive file',
                 type: 'string'
             });
 
-            yargs.positional('file', {
-                description: 'the filename or hash you would like to remove',
-                type: 'string'
+            yargs.positional('files', {
+                description: 'the filenames or hashes within the archive',
+                type: 'array'
             });
         },
         async argv => {
@@ -114,11 +118,8 @@ yargs
             try {
                 archive.readArchive(await fs.readFile(argv.archive));
 
-                if (!archive.entries.delete(+argv.file) ||
-                    !archive.entries.delete(hashFilename(argv.file))) {
-                    console.log(`"${argv.file}" not found in "` +
-                        `${argv.archive}"`);
-                    return;
+                for (const name of argv.files) {
+                    archive.removeEntry(name);
                 }
 
                 await fs.writeFile(argv.archive, archive.toArchive());
@@ -154,5 +155,15 @@ yargs
                     `${prettyBytes(entry.length)})`);
             }
         })
+    .command(
+        ['h <name>', 'hash'],
+        'return the integer hash of a filename string',
+        yargs => {
+            yargs.positional('name', {
+                description: 'the string to hash',
+                type: 'string'
+            });
+        },
+        argv => console.log(hashFilename(argv.name)))
     .demandCommand()
     .argv;

@@ -103,16 +103,21 @@ class JagArchive {
         this.readEntries();
     }
 
-    // read a file from the decompressed archive
-    getEntry(filename) {
-        const hash = hashFilename(filename);
+    hasEntry(name) {
+        const hash = typeof name === 'number' ? name : hashFilename(name);
+        return this.entries.has(hash);
+    }
 
+    // read a file from the decompressed archive
+    getEntry(name) {
         if (!this.unzippedBuffer || !this.unzippedBuffer.data.length) {
             throw new Error('no decompressed data found');
         }
 
-        if (!this.entries.has(hash)) {
-            throw new Error(`entry ${filename} (${hash}) not found`);
+        const hash = typeof name === 'number' ? name : hashFilename(name);
+
+        if (!this.hasEntry(hash)) {
+            throw new Error(`entry ${name} (${hash}) not found`);
         }
 
         return this.entries.get(hash);
@@ -122,6 +127,15 @@ class JagArchive {
     putEntry(filename, entry) {
         const hash = hashFilename(filename);
         this.entries.set(hash, entry);
+    }
+
+    // remove an entry by hash or filename (or throw if it doesn't exist)
+    removeEntry(name) {
+        const hash = typeof name === 'number' ? name : hashFilename(name);
+
+        if (!this.entries.delete(hash)) {
+            throw new Error(`entry ${name} (${hash}) not found`);
+        }
     }
 
     // write the archive sizes

@@ -5,31 +5,33 @@ each individual entry (file). filenames are stored with a "hash" so it's
 impossible to recover the originals without bruteforcing (unless they're under
 ~5 characters).
 
+this module works in the browser and node.
+
 ## install
 
-    $ npm install @2003scape/rsc-archiver
+    $ npm install @2003scape/rsc-archiver # -g for CLI program
 
-## usage
-### cli
+## cli usage
 ```
 rsc-archiver <command>
 
 Commands:
-  rsc-archiver x <archive> <file> [<out>]  extract a file from an archive
+  rsc-archiver x <archive> <files..>  extract a file from an archive
                                                               [aliases: extract]
-  rsc-archiver a <archive> <file> [-g]     add a file to an archive
-                                                                  [aliases: add]
-  rsc-archiver d <archive> <file>          remove a file from an archive
+  rsc-archiver a <archive> <files..>  add files to an archive     [aliases: add]
+  rsc-archiver d <archive> <files..>  remove files from an archive
                                                                [aliases: delete]
-  rsc-archiver l <archive>                 list hashes and file sizes in an
-                                           archive               [aliases: list]
+  rsc-archiver l <archive>            list hashes and file sizes in an archive
+                                                                 [aliases: list]
+  rsc-archiver h <name>               return the integer hash of a filename
+                                      string                     [aliases: hash]
 
 Options:
   --help     Show help                                                 [boolean]
   --version  Show version number                                       [boolean]
 ```
 
-### api
+## example
 ```javascript
 const fs = require('fs');
 const { JagArchive } = require('./src');
@@ -50,6 +52,33 @@ archive.readArchive(rawJag);
 console.log(`cache has ${archive.entries.size} files`);
 console.log(archive.getEntry('test.txt').toString());
 ```
+
+## api
+### archive.entries
+Map of hashes -> decompressed file buffers.
+
+### archive = new JagArchive()
+create a new jag (de)compressor instance.
+
+### archive.readArchive(buffer)
+decompress buffer and populate entries with each file within.
+
+### archive.hasEntry(name)
+check if archive contains entry based on hash or filename.
+
+### archive.getEntry(name)
+return entry based on name or hash.
+
+### archive.putEntry(name, buffer)
+add a file to the archive buffer.
+
+### archive.removeEntry(name)
+remove entry based on name or hash.
+
+### archive.toArchive(individualCompress=true)
+compress entries to a jagex archive. if `individualCompress` is true, bzip each
+file separately. otherwise, concatinate all of the files and then bzip
+that result instead.
 
 ## license
 Copyright 2019  2003Scape Team

@@ -1,8 +1,8 @@
 {
   "name": "@2003scape/rsc-archiver",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "compress and decompress runescape classic cache archives",
-  "main": "index.js",
+  "main": "./src/index.js",
   "bin": {
     "rsc-archiver": "./src/bin.js"
   },
