@@ -81,7 +81,7 @@ file separately. otherwise, concatinate all of the files and then bzip
 that result instead.
 
 ## license
-Copyright 2019  2003Scape Team
+Copyright 2020  2003Scape Team
 
 This program is free software: you can redistribute it and/or modify it under
 the terms of the GNU Affero General Public License as published by the
