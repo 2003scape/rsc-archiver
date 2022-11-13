@@ -1,7 +1,7 @@
 # rsc-archiver
 compress and decompress runescape classic .jag/.mem cache files. these files
 contain a proprietary header describing the size of the archive, and of
-each individual entry (file). filenames are stored with a "hash" so it's
+each individual entry (file). filenames are stored with a hash so it's
 impossible to recover the originals without bruteforcing (unless they're under
 ~5 characters).
 
@@ -23,42 +23,57 @@ Commands:
                                                                [aliases: delete]
   rsc-archiver l <archive>            list hashes and file sizes in an archive
                                                                  [aliases: list]
-  rsc-archiver h <name>               return the integer hash of a filename
-                                      string                     [aliases: hash]
+  rsc-archiver h <name>               return the integer hash of a filename stri
+                                      ng                         [aliases: hash]
 
 Options:
   --help     Show help                                                 [boolean]
   --version  Show version number                                       [boolean]
+
+Examples:
+  rsc-archiver l ./cache/config85.jag       list the hashes in config85.jag
+  rsc-archiver a ./cache/jagex.jag logo.tg  add logo.tga to jagex.jag
+  a
 ```
 
 ## example
 ```javascript
-const fs = require('fs');
-const { JagArchive } = require('./src');
+import fs from 'fs/promises';
+import { JagArchive } from './src/index.js';
 
-let rawJag = fs.readFileSync('./data204/sounds1.mem');
-let archive = new JagArchive();
-archive.readArchive(rawJag);
+const archive = new JagArchive();
+await archive.init();
+archive.readArchive(await fs.readFile('./cache/sounds1.mem'));
+
 console.log(`cache has ${archive.entries.size} files`);
-fs.writeFileSync('death.pcm', archive.getEntry('death.pcm'));
 
-const testArchive = new JagArchive();
-testArchive.putEntry('test.txt', Buffer.from('test string'));
-fs.writeFileSync('./data204/test.jag', testArchive.toArchive(true));
+// get death.pcm from the archive and write it to disk
+await fs.writeFile('death.pcm', archive.getEntry('death.pcm'));
 
-rawJag = fs.readFileSync('./data204/test.jag');
-archive = new JagArchive();
-archive.readArchive(rawJag);
+// create a new archive and add a text file to it
+archive.entries.clear();
+archive.putEntry('test.txt', Buffer.from('test string'));
+await fs.writeFile('./cache/test.jag', archive.toArchive(true));
+
+// read the new archive and retrive the file from it
+archive.readArchive(await fs.readFile('./cache/test.jag'))
+
 console.log(`cache has ${archive.entries.size} files`);
-console.log(archive.getEntry('test.txt').toString());
+console.log(Buffer.from(archive.getEntry('test.txt')).toString());
 ```
 
 ## api
-### archive.entries
-Map of hashes -> decompressed file buffers.
+### hashFilename(filename)
+convert `filename` to integer hash used in archives.
 
 ### archive = new JagArchive()
 create a new jag (de)compressor instance.
+
+### archive.entries
+Map of hashes -> decompressed file buffers.
+
+### archive.init()
+initialize the bzip wasm.
 
 ### archive.readArchive(buffer)
 decompress buffer and populate entries with each file within.
@@ -81,7 +96,7 @@ file separately. otherwise, concatinate all of the files and then bzip
 that result instead.
 
 ## license
-Copyright 2020  2003Scape Team
+Copyright 2022  2003Scape Team
 
 This program is free software: you can redistribute it and/or modify it under
 the terms of the GNU Affero General Public License as published by the

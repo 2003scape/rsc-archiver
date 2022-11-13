@@ -1,16 +1,16 @@
 function oobError() {
-    return new RangeError('out of bounds');
+    throw new RangeError('out of bounds');
 }
 
 class JagBuffer {
     constructor(data) {
-        this.data = data;
+        this.data = new Uint8Array(data);
         this.caret = 0;
     }
 
     getUByte() {
         if (this.caret + 1 > this.size) {
-            throw oobError();
+            oobError();
         }
 
         const out = this.data[this.caret] >>> 0;
@@ -22,7 +22,7 @@ class JagBuffer {
 
     getUShort() {
         if (this.caret + 2 > this.size) {
-            throw oobError();
+            oobError();
         }
 
         let out = ((this.data[this.caret] & 0xff) << 8) >>> 0;
@@ -35,7 +35,7 @@ class JagBuffer {
 
     getUInt3() {
         if (this.caret + 3 > this.size) {
-            throw oobError();
+            oobError();
         }
 
         let out = ((this.data[this.caret] & 0xff) << 16) >>> 0;
@@ -49,13 +49,13 @@ class JagBuffer {
 
     getInt4() {
         if (this.caret + 4 > this.size) {
-            throw oobError();
+            oobError();
         }
 
-        let out = ((this.data[this.caret] & 0xff) << 24);
-        out = (out | ((this.data[this.caret + 1] & 0xff) << 16));
-        out = (out | ((this.data[this.caret + 2] & 0xff) << 8));
-        out = (out | (this.data[this.caret + 3] & 0xff));
+        let out = (this.data[this.caret] & 0xff) << 24;
+        out = out | ((this.data[this.caret + 1] & 0xff) << 16);
+        out = out | ((this.data[this.caret + 2] & 0xff) << 8);
+        out = out | (this.data[this.caret + 3] & 0xff);
 
         this.caret += 4;
 
@@ -73,12 +73,14 @@ class JagBuffer {
 
     writeUByte(value) {
         this.data[this.caret] = value;
+
         this.caret += 1;
     }
 
     writeUShort(value) {
         this.data[this.caret] = (value >> 8) & 0xff;
         this.data[this.caret + 1] = value & 0xff;
+
         this.caret += 2;
     }
 
@@ -86,6 +88,7 @@ class JagBuffer {
         this.data[this.caret] = (value >> 16) >>> 0;
         this.data[this.caret + 1] = (value >> 8) >>> 0;
         this.data[this.caret + 2] = value & 0xff;
+
         this.caret += 3;
     }
 
@@ -94,16 +97,13 @@ class JagBuffer {
         this.data[this.caret + 1] = value >> 16;
         this.data[this.caret + 2] = value >> 8;
         this.data[this.caret + 3] = value & 0xff;
+
         this.caret += 4;
     }
 
     writeBytes(bytes, start) {
         start = isNaN(+start) ? this.caret : start;
     }
-
-    get size() {
-        return this.data.byteLength;
-    }
 }
 
-module.exports = JagBuffer;
+export default JagBuffer;

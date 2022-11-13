@@ -1,11 +1,14 @@
-const JagBuffer = require('./jag-buffer');
-// we have to use this fork of compressjs as the main one has issues compiling
-// with browserify and webpack
-const { Bzip2 } = require('@ledgerhq/compressjs');
+import BZip2 from 'bzip2-wasm';
 
-// BZ is a magic symbol, h is for huffman and 1 is the level of compression (
-// from 1-9)
-const BZIP_HEADER = Buffer.from(['B', 'Z', 'h', '1'].map(c => c.charCodeAt(0)));
+import JagBuffer from './jag-buffer.js';
+
+// bzip block size (multiplies by 100k)
+const BLOCK_SIZE = 1;
+
+// BZ is a magic symbol, h is for huffman and 1 is the block size (from 1-9)
+const BZIP_HEADER = new Uint8Array(
+    ['B', 'Z', 'h', BLOCK_SIZE.toString()].map((c) => c.charCodeAt(0))
+);
 
 // maximum amount of files one archive can hold
 const MAX_ENTRIES = 65535;
@@ -20,28 +23,37 @@ function hashFilename(filename) {
     let hash = 0;
 
     for (let i = 0; i < filename.length; i += 1) {
-        hash = (((hash * 61) | 0) + filename.charCodeAt(i)) - 32;
+        hash = ((hash * 61) | 0) + filename.charCodeAt(i) - 32;
     }
 
     return hash;
-}
-
-// add the bzip magic header and decompress it
-function bzipDecompress(compressed) {
-    return Buffer.from(
-        Bzip2.decompressFile(Buffer.concat([BZIP_HEADER, compressed])));
-}
-
-// compress data remove the bzip magic header
-function bzipCompress(data) {
-    return Buffer.from(Bzip2.compressFile(data, undefined, 1))
-        .slice(BZIP_HEADER.length);
 }
 
 class JagArchive {
     constructor() {
         // { fileHash: Buffer }
         this.entries = new Map();
+
+        this.bzip2 = new BZip2();
+    }
+
+    async init() {
+        await this.bzip2.init();
+    }
+
+    // add the bzip magic header and decompress it
+    bzipDecompress(compressed, size) {
+        const headered = new Uint8Array(BZIP_HEADER.length + compressed.length);
+
+        headered.set(BZIP_HEADER);
+        headered.set(compressed, BZIP_HEADER.length);
+
+        return this.bzip2.decompress(headered, size);
+    }
+
+    // compress data remove the bzip magic header
+    bzipCompress(data) {
+        return this.bzip2.compress(data, BLOCK_SIZE).slice(BZIP_HEADER.length);
     }
 
     // read the archive sizes
@@ -61,7 +73,8 @@ class JagArchive {
 
         if (this.size !== this.compressedSize) {
             this.unzippedBuffer = new JagBuffer(
-                bzipDecompress(this.zippedBuffer));
+                this.bzipDecompress(this.zippedBuffer, this.size)
+            );
         } else {
             this.unzippedBuffer = new JagBuffer(this.zippedBuffer);
         }
@@ -69,6 +82,8 @@ class JagArchive {
 
     // populate the entries table
     readEntries() {
+        this.entries.clear();
+
         const totalEntries = this.unzippedBuffer.getUShort();
 
         let offset = 2 + totalEntries * 10;
@@ -76,19 +91,24 @@ class JagArchive {
         for (let i = 0; i < totalEntries; i += 1) {
             const hash = this.unzippedBuffer.getInt4();
             const size = this.unzippedBuffer.getUInt3();
+
             const compressedSize = this.unzippedBuffer.getUInt3();
+
             const compressed = this.unzippedBuffer.data.slice(
-                offset, offset + compressedSize);
+                offset,
+                offset + compressedSize
+            );
 
             let decompressed;
 
             if (size !== compressedSize) {
-                decompressed = bzipDecompress(compressed);
+                decompressed = this.bzipDecompress(compressed, size);
             } else {
                 decompressed = compressed;
             }
 
             this.entries.set(hash, decompressed);
+
             offset += compressedSize;
         }
     }
@@ -105,6 +125,7 @@ class JagArchive {
 
     hasEntry(name) {
         const hash = typeof name === 'number' ? name : hashFilename(name);
+
         return this.entries.has(hash);
     }
 
@@ -140,8 +161,8 @@ class JagArchive {
 
     // write the archive sizes
     writeHeader() {
-        this.header = new JagBuffer(Buffer.alloc(6));
-        this.header.writeUInt3(this.unzippedBuffer.size);
+        this.header = new JagBuffer(new Uint8Array(6));
+        this.header.writeUInt3(this.unzippedBuffer.data.length);
         this.header.writeUInt3(this.zippedBuffer.length);
     }
 
@@ -149,7 +170,7 @@ class JagArchive {
     // individually)
     compress(individualCompress = true) {
         if (!individualCompress) {
-            this.zippedBuffer = bzipCompress(this.unzippedBuffer.data);
+            this.zippedBuffer = this.bzipCompress(this.unzippedBuffer.data);
         } else {
             this.zippedBuffer = this.unzippedBuffer.data;
         }
@@ -167,13 +188,20 @@ class JagArchive {
         let compressedSize = 0;
 
         for (const [hash, entry] of this.entries) {
-            const compressed = individualCompress ? bzipCompress(entry) : entry;
+            const compressed = individualCompress
+                ? this.bzipCompress(entry)
+                : entry;
+
             compressedEntries.set(hash, compressed);
 
-            if (entry.length > MAX_FILE_SIZE ||
-                compressed.length > MAX_FILE_SIZE) {
-                throw new RangeError(`entry ${hash} is too big for archive (` +
-                    `${entry.length > MAX_FILE_SIZE})`);
+            if (
+                entry.length > MAX_FILE_SIZE ||
+                compressed.length > MAX_FILE_SIZE
+            ) {
+                throw new RangeError(
+                    `entry ${hash} is too big for archive (` +
+                        `${entry.length > MAX_FILE_SIZE})`
+                );
             }
 
             compressedSize += compressed.length;
@@ -183,7 +211,8 @@ class JagArchive {
         let entryOffset = 2 + this.entries.size * 10;
 
         this.unzippedBuffer = new JagBuffer(
-            Buffer.alloc(entryOffset + compressedSize));
+            new Uint8Array(entryOffset + compressedSize)
+        );
 
         this.unzippedBuffer.writeUShort(this.entries.size);
 
@@ -192,7 +221,8 @@ class JagArchive {
             this.unzippedBuffer.writeUInt3(this.entries.get(hash).length);
             this.unzippedBuffer.writeUInt3(compressedEntry.length);
 
-            compressedEntry.copy(this.unzippedBuffer.data, entryOffset);
+            //compressedEntry.copy(this.unzippedBuffer.data, entryOffset);
+            this.unzippedBuffer.data.set(compressedEntry, entryOffset);
             entryOffset += compressedEntry.length;
         }
     }
@@ -205,13 +235,19 @@ class JagArchive {
         this.compress(individualCompress);
         this.writeHeader();
 
-        return Buffer.concat([this.header.data, this.zippedBuffer]);
+        const headered = new Uint8Array(
+            this.header.data.length + this.zippedBuffer.length
+        );
+
+        headered.set(this.header.data);
+        headered.set(this.zippedBuffer, this.header.data.length);
+
+        return headered;
     }
 
     toString() {
-        return `[object ${this.constructor.name} (${this.entries.size})]`;
+        return `[${this.constructor.name} (${this.entries.size})]`;
     }
 }
 
-module.exports.hashFilename = hashFilename;
-module.exports.JagArchive = JagArchive;
+export { hashFilename, JagArchive };

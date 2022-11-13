@@ -1,18 +1,22 @@
-const fs = require('fs');
-const { JagArchive } = require('./src');
+import fs from 'fs/promises';
+import { JagArchive } from './src/index.js';
 
-let rawJag = fs.readFileSync('./data204/sounds1.mem');
-let archive = new JagArchive();
-archive.readArchive(rawJag);
+const archive = new JagArchive();
+await archive.init();
+archive.readArchive(await fs.readFile('./cache/sounds1.mem'));
+
 console.log(`cache has ${archive.entries.size} files`);
-fs.writeFileSync('death.pcm', archive.getEntry('death.pcm'));
 
-const testArchive = new JagArchive();
-testArchive.putEntry('test.txt', Buffer.from('test string'));
-fs.writeFileSync('./data204/test.jag', testArchive.toArchive(true));
+// get death.pcm from the archive and write it to disk
+await fs.writeFile('death.pcm', archive.getEntry('death.pcm'));
 
-rawJag = fs.readFileSync('./data204/test.jag');
-archive = new JagArchive();
-archive.readArchive(rawJag);
+// create a new archive and add a text file to it
+archive.entries.clear();
+archive.putEntry('test.txt', Buffer.from('test string'));
+await fs.writeFile('./cache/test.jag', archive.toArchive(true));
+
+// read the new archive and retrive the file from it
+archive.readArchive(await fs.readFile('./cache/test.jag'))
+
 console.log(`cache has ${archive.entries.size} files`);
-console.log(archive.getEntry('test.txt').toString());
+console.log(Buffer.from(archive.getEntry('test.txt')).toString());
