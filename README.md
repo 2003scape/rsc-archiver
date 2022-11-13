@@ -72,7 +72,7 @@ create a new jag (de)compressor instance.
 ### archive.entries
 Map of hashes -> decompressed file buffers.
 
-### archive.init()
+### async archive.init()
 initialize the bzip wasm.
 
 ### archive.readArchive(buffer)
