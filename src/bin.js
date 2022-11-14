@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import fs from 'fs';
+import fs from 'fs/promises';
 import path from 'path';
 
 import Table from 'cli-table3';
@@ -9,7 +9,7 @@ import yargs from 'yargs';
 import { hashFilename, JagArchive } from './index.js';
 import { hideBin } from 'yargs/helpers';
 
-const pkg = JSON.parse(fs.readFileSync('./package.json'));
+const pkg = JSON.parse(await fs.readFile('./package.json'));
 
 yargs(hideBin(process.argv))
     .scriptName('rsc-archiver')
@@ -56,11 +56,11 @@ yargs(hideBin(process.argv))
             }
 
             try {
-                archive.readArchive(await fs.promises.readFile(argv.archive));
+                archive.readArchive(await fs.readFile(argv.archive));
 
                 for (let i = 0; i < argv.files.length; i += 1) {
                     const file = archive.getEntry(argv.files[i]);
-                    await fs.promises.writeFile(outputNames[i], file);
+                    await fs.writeFile(outputNames[i], file);
                 }
             } catch (e) {
                 process.errorCode = 1;
@@ -96,7 +96,7 @@ yargs(hideBin(process.argv))
             await archive.init();
 
             try {
-                archive.readArchive(await fs.promises.readFile(argv.archive));
+                archive.readArchive(await fs.readFile(argv.archive));
             } catch (e) {
                 // file doesn't exist, but writeFile will create it
             }
@@ -105,12 +105,9 @@ yargs(hideBin(process.argv))
                 for (const file of argv.files) {
                     const filename = path.basename(file);
 
-                    archive.putEntry(
-                        filename,
-                        await fs.promises.readFile(file)
-                    );
+                    archive.putEntry(filename, await fs.readFile(file));
 
-                    await fs.promises.writeFile(
+                    await fs.writeFile(
                         argv.archive,
                         archive.toArchive(!argv.g)
                     );
@@ -141,13 +138,13 @@ yargs(hideBin(process.argv))
             await archive.init();
 
             try {
-                archive.readArchive(await fs.promises.readFile(argv.archive));
+                archive.readArchive(await fs.readFile(argv.archive));
 
                 for (const name of argv.files) {
                     archive.removeEntry(name);
                 }
 
-                await fs.promises.writeFile(argv.archive, archive.toArchive());
+                await fs.writeFile(argv.archive, archive.toArchive());
             } catch (e) {
                 process.exitCode = 1;
                 console.error(e);
@@ -176,7 +173,7 @@ yargs(hideBin(process.argv))
             await archive.init();
 
             try {
-                archive.readArchive(await fs.promises.readFile(argv.archive));
+                archive.readArchive(await fs.readFile(argv.archive));
             } catch (e) {
                 process.exitCode = 1;
                 console.error(e);

@@ -25,7 +25,7 @@
   },
   "homepage": "https://github.com/2003scape/rsc-archiver#readme",
   "dependencies": {
-    "bzip2-wasm": "^1.0.0",
+    "bzip2-wasm": "^1.0.1",
     "cli-table3": "^0.6.3",
     "pretty-bytes": "^6.0.0",
     "yargs": "^17.6.2"

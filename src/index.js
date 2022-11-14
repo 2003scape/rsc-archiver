@@ -221,7 +221,6 @@ class JagArchive {
             this.unzippedBuffer.writeUInt3(this.entries.get(hash).length);
             this.unzippedBuffer.writeUInt3(compressedEntry.length);
 
-            //compressedEntry.copy(this.unzippedBuffer.data, entryOffset);
             this.unzippedBuffer.data.set(compressedEntry, entryOffset);
             entryOffset += compressedEntry.length;
         }
@@ -250,4 +249,4 @@ class JagArchive {
     }
 }
 
-export { hashFilename, JagArchive };
+export { hashFilename, JagArchive, JagBuffer };
